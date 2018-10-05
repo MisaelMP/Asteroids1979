@@ -1,0 +1,6 @@
+#game {
+  margin-top: 8em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
