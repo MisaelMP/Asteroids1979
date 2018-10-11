@@ -1,5 +1,26 @@
+@import url('https://fonts.googleapis.com/css?family=Megrim');
+
+*,  *:before, *:after {
+    margin: 0;
+    padding: 0;
+    box-sizing:border-box;
+    -moz-box-sizing:border-box;
+}
+
+body {
+  background-color: #fcfcf0;
+}
+h1 {
+  text-align: center;
+  margin-top: 0.5em;
+  font-size: 6vw;
+  font-family: 'Megrim', cursive;
+  color: #0c759c;
+  text-shadow: 2px 2px 4px #16161d;
+}
+
 #game {
-  margin-top: 8em;
+  margin-top: 2em;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -8,6 +8,9 @@ document.addEventListener("DOMContentLoaded", function() {
   const LASER_MAX = 10; // max number of laser on screen at once
   const LASER_SPD = 500; // speed of lasers in pixels per second
   const ROIDS_JAG = 0.3; // jaggedness of the asteroids 0 = 1, 1 = lots
+  const ROIDS_PTS_LGE = 20; // points scored for large asteroids
+  const ROIDS_PTS_MED = 50; // points scored for medium asteroids
+  const ROIDS_PTS_SML = 100; // points scored for small asteroids
   const ROIDS_NUM = 1; // Asteroids starting number
   const ROIDS_SIZE = 100; // Asteroids starting size of asteroids in pixels
   const ROIDS_SPD = 50; // max starting speed of asteroids in pixels per second
@@ -22,13 +25,27 @@ document.addEventListener("DOMContentLoaded", function() {
   const SHOW_BOUNDING = false;
   const TEXT_FADE_TIME = 2.5; // text fade in time
   const TEXT_SIZE = 40; // text size in pixels
+  const SAVE_KEY_SCORE = "highscore" // save key for local storage of highscore
+  const SOUND_ON = false;
+  const MUSIC_ON = false;
+
 
   /** @type {HTMLCanvasElement}  */
   const canv = document.getElementById("gameCanvas");
   const ctx = canv.getContext("2d");
 
+  // set up sound effects
+  const fxExplode = new Sound("sounds/explode.m4a");
+  const fxLaser = new Sound("sounds/laser.m4a", 5, 0.5);
+  const fxHit = new Sound("sounds/hit.m4a", 5);
+  const fxThrust = new Sound("sounds/thrust.m4a");
+
+  // set up the music
+  const music = new Music("sounds/music-low.m4a", "sounds/music-high.m4a");
+  let roidsLeft, roidsTotal;
+
   // set up the game parameters
-  let level, lives, roids, ship, text, textAlpha;
+  let level, lives, roids, score, scoreHigh, ship, text, textAlpha;
   newGame();
 
   // set up event handlers
@@ -40,6 +57,8 @@ document.addEventListener("DOMContentLoaded", function() {
   setInterval(update, 1000 / FPS);
   function createAsteroidBelt() {
     roids = [];
+    roidsTotal = (ROIDS_NUM + level) * 7;
+    roidsLeft = roidsTotal
     let x, y;
     for (let i = 0; i < ROIDS_NUM + level; i++) {
       do {
@@ -59,14 +78,28 @@ document.addEventListener("DOMContentLoaded", function() {
     if (r === Math.ceil(ROIDS_SIZE / 2)) {
       roids.push(newAsteroid(x, y, Math.ceil(ROIDS_SIZE / 4)));
       roids.push(newAsteroid(x, y, Math.ceil(ROIDS_SIZE / 4)));
+      score += ROIDS_PTS_LGE;
     } else if (r === Math.ceil(ROIDS_SIZE / 4)) {
       roids.push(newAsteroid(x, y, Math.ceil(ROIDS_SIZE / 8)));
       roids.push(newAsteroid(x, y, Math.ceil(ROIDS_SIZE / 8)));
+      score += ROIDS_PTS_MED;
+    } else {
+      score += ROIDS_PTS_SML;
+    }
+
+    //check high score
+    if (score > scoreHigh) {
+      scoreHigh = score;
+      localStorage.setItem(SAVE_KEY_SCORE, scoreHigh);
     }
 
     // destroy the asteroid
     roids.splice(index, 1);
+    fxHit.play();
 
+    // calculate the ratio of remaining asteroids to increase the music tempo
+    roidsLeft--;
+    music.setAsteroidRatio(roidsLeft === 0 ? 1 : roidsLeft / roidsTotal);
     // new level when no more asteroids
     if (roids.length == 0) {
       level++;
@@ -102,6 +135,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
   function explodeShip() {
     ship.explodeTime = Math.ceil(SHIP_EXPLODE_DUR * FPS);
+    fxExplode.play();
   }
 
   function gameOver() {
@@ -177,7 +211,18 @@ document.addEventListener("DOMContentLoaded", function() {
     // set up ship object
     level = 0;
     lives = GAME_LIVES;
+    score = 0;
+    scoreHigh = localStorage.getItem(SAVE_KEY_SCORE);
     ship = newShip();
+
+    // get the high score from local storage
+    const scoreStr = localStorage.getItem(SAVE_KEY_SCORE);
+    if (scoreStr === null) {
+      scoreHigh = 0;
+    } else {
+      scoreHigh = parseInt(scoreStr);
+    }
+
     newLevel();
   }
 
@@ -219,14 +264,71 @@ document.addEventListener("DOMContentLoaded", function() {
         dist: 0,
         explodeTime: 0
       });
+      fxLaser.play();
     }
     // prevent further shooting
     ship.canShoot = false;
   }
 
+  function Music(srcLow, srcHigh) {
+    this.soundLow = new Audio(srcLow);
+    this.soundHigh = new Audio(srcHigh);
+    this.low = true;
+    this.tempo = 1.0; // seconds per beat
+    this.beatTime = 0; // frames left until next beat
+
+    this.play = function() {
+      if (MUSIC_ON) {
+      if (this.low) {
+        this.soundLow.play();
+      }else {
+        this.soundHigh.play();
+      }
+      this.low = !this.low;
+      }
+    }
+
+    this.setAsteroidRatio = function(ratio) {
+      this.tempo = 1.0 - 0.75 * (1.0 - ratio);
+    }
+
+    this.tick = function() {
+      if (this.beatTime === 0) {
+        this.play();
+        this.beatTime = Math.ceil(this.tempo * FPS);
+      } else {
+        this.beatTime--;
+      }
+    }
+  }
+
+  function Sound(src, maxStreams = 1, vol = 1.0) {
+    this.streamNum = 0;
+    this.streams = [];
+    for (let i = 0; i < maxStreams; i++) {
+      this.streams.push(new Audio(src));
+      this.streams[i].volume = vol;
+    }
+
+    this.play = function() {
+      if (SOUND_ON) {
+      this.streamNum = (this.streamNum + 1) % maxStreams;
+      this.streams[this.streamNum].play();
+      }
+    }
+
+    this.stop = function() {
+      this.streams[this.streamNum].pause();
+      this.streams[this.streamNum].currentTime = 0;
+    }
+  }
   function update() {
     const blinkOn = ship.blinkNum % 2 === 0;
     const exploding = ship.explodeTime > 0;
+
+    // tick the music
+    music.tick();
+
     // draw space
     ctx.fillStyle = "#251c1c";
     ctx.fillRect(0, 0, canv.width, canv.height);
@@ -274,6 +376,7 @@ document.addEventListener("DOMContentLoaded", function() {
     if (ship.thrusting && !ship.dead) {
       ship.thrust.x += SHIP_THRUST * Math.cos(ship.a) / FPS;
       ship.thrust.y -= SHIP_THRUST * Math.sin(ship.a) / FPS;
+      fxThrust.play();
 
       // draw the thruster
       if (!exploding && blinkOn) {
@@ -294,8 +397,11 @@ document.addEventListener("DOMContentLoaded", function() {
         ctx.stroke();
       }
     } else {
+      // apply friction to slow down the ship when not thrusting
       ship.thrust.x -= FRICTION * ship.thrust.x / FPS;
       ship.thrust.y -= FRICTION * ship.thrust.y / FPS;
+      fxThrust.stop();
+
     }
 
     // draw a triangular ship
@@ -381,7 +487,7 @@ document.addEventListener("DOMContentLoaded", function() {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle"
       ctx.fillStyle = `rgba(255, 255, 225, ${textAlpha})`;
-      ctx.font = "small-caps " + TEXT_SIZE + "px dejavu sans mono";
+      ctx.font = `small-caps ${TEXT_SIZE}px arial`;
       ctx.fillText(text, canv.width / 2, canv.height * 0.75);
       textAlpha -= (1.0 / TEXT_FADE_TIME / FPS);
     } else if (ship.dead) {
@@ -394,6 +500,20 @@ document.addEventListener("DOMContentLoaded", function() {
       lifeColour = exploding && i == lives - 1 ? "#7a0505" : "#ccbcbc";
       drawShip(SHIP_SIZE + i * SHIP_SIZE * 1.2,   SHIP_SIZE, 0.5 * Math.PI, lifeColour);
     }
+
+    // draw the score
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ccbcbc";
+    ctx.font = `${TEXT_SIZE}px arial`;
+    ctx.fillText(score, canv.width - SHIP_SIZE / 2, SHIP_SIZE);
+
+    // draw the high score
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ccbcbc";
+    ctx.font = (TEXT_SIZE * 0.65) + "px arial";;
+    ctx.fillText("BEST " + scoreHigh, canv.width / 2, SHIP_SIZE);
 
     // detect laser hits on asteroids
     let ax, ay, ar, lx, ly;
