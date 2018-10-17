@@ -26,8 +26,8 @@ document.addEventListener("DOMContentLoaded", function() {
   const TEXT_FADE_TIME = 2.5; // text fade in time
   const TEXT_SIZE = 40; // text size in pixels
   const SAVE_KEY_SCORE = "highscore" // save key for local storage of highscore
-  const SOUND_ON = false;
-  const MUSIC_ON = false;
+  const SOUND_ON = true;
+  const MUSIC_ON = true;
 
 
   /** @type {HTMLCanvasElement}  */
